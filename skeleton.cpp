@@ -1,3 +1,7 @@
+// Done by:
+// Glen Ko - glen_ko@hotmail.com
+// Ian Leow - ianleow.nus@gmail.com
+
 #include <iostream>
 #include <glm/glm.hpp>
 #include <SDL.h>

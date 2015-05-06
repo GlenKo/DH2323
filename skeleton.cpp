@@ -126,7 +126,7 @@ float myAbs(float const& v);
 int myAbs(int const& v);
 
 // Functions Coded by Glen
-bool isBackface(Triangle triangle);
+bool isBackface(vec3 pos3d, vec3 triangleNormal);
 void writeNormal(Triangle& triangle);
 
 // ----------------------------------------------------------------------------
@@ -915,11 +915,11 @@ void DrawWithPixelIllumination() {
 
 	for (size_t i = 0; i<triangles.size(); ++i) {
 
-		// ** Start Backface-culling code **
-		if (isBackface(triangles[i])) {
-			continue;
-		}
-		// ** End Backface-culling code **
+		//// ** Start Backface-culling code **
+		//if (isBackface(triangles[i].v0, triangles[i].normal)) {
+		//	continue;
+		//}
+		//// ** End Backface-culling code **
 
 		vector<Vertex> vertices(3);
 
@@ -1038,6 +1038,16 @@ void PixelShader(const PixelP& p) {
 
 	if (p.zinv >= depthBuffer[x][y]) {
 		depthBuffer[x][y] = p.zinv;
+
+		// ** Start Selective illumination **
+		// do not compute directLight if backfacing
+		if (isBackface(p.pos3d, currentNormal)) {
+			vec3 pixelColor = currentReflectance * (indirectLightPowerPerArea);
+			PutPixelSDL(screen, x, y, pixelColor);
+			return;
+		}
+		// ** End Selective illumination **
+
 
 		// Compute illumination
 		vec3 ncap = glm::normalize(currentNormal);
@@ -1238,16 +1248,16 @@ void LoadCustomModel(vector<Triangle>& triangles) {
 		writeNormal(triangles[i]);
 	}
 
-	cout << "Custom model successfully loaded!" << endl;
+	cout << "Custom model successfully loaded!" << endl;	
 }
 
 // Check if a triangle is backwards facing in relation to the camera.
 // Part of the Backface-culling procedure that is supposed to speed up rendering time.
 // Assumptions: Triangle that is passed into this algorithm must not be a Bézier surface, 
 //				ie, all points on the triangle must have the same normal.
-bool isBackface(Triangle triangle) {
-	vec3 cameraFacing = triangle.v0 - cameraPosition;
-	float dotProduct = glm::dot(cameraFacing, triangle.normal);
+bool isBackface(vec3 pos3d, vec3 triangleNormal) {
+	vec3 cameraFacing = pos3d - cameraPosition;
+	float dotProduct = glm::dot(cameraFacing, triangleNormal);
 
 	if (dotProduct < 0) {
 		return true;

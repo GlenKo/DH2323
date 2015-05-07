@@ -125,6 +125,10 @@ Pixel myAbs(Pixel const& p);
 float myAbs(float const& v);
 int myAbs(int const& v);
 
+// Functions Coded by Glen
+bool isBackface(vec3 pos3d, vec3 triangleNormal);
+void writeNormal(Triangle& triangle);
+
 // ----------------------------------------------------------------------------
 void LoadCustomModel(vector<Triangle>& triangles);
 
@@ -214,7 +218,11 @@ void Update() {
 	float dt = float(t2 - t);
 	t = t2;
 	cout << "Render time: " << dt << " ms." << endl;
+<<<<<<< HEAD
 	cout << "Camera Position: " << cameraPosition.x << " " << cameraPosition.y << " " << cameraPosition.z << endl;
+=======
+	//cout << lightPos.x << " " << lightPos.y << " " << lightPos.z << endl;
+>>>>>>> origin/master
 
 	Uint8* keystate = SDL_GetKeyState(0);
 
@@ -920,6 +928,13 @@ void DrawWithPixelIllumination() {
 			depthBuffer[i][j] = 0.0f;
 
 	for (size_t i = 0; i<triangles.size(); ++i) {
+
+		//// ** Start Backface-culling code **
+		//if (isBackface(triangles[i].v0, triangles[i].normal)) {
+		//	continue;
+		//}
+		//// ** End Backface-culling code **
+
 		vector<Vertex> vertices(3);
 
 		vertices[0].position = triangles[i].v0;
@@ -1037,6 +1052,16 @@ void PixelShader(const PixelP& p) {
 
 	if (p.zinv >= depthBuffer[x][y]) {
 		depthBuffer[x][y] = p.zinv;
+
+		// ** Start Selective illumination **
+		// do not compute directLight if backfacing
+		if (isBackface(p.pos3d, currentNormal)) {
+			vec3 pixelColor = currentReflectance * (indirectLightPowerPerArea);
+			PutPixelSDL(screen, x, y, pixelColor);
+			return;
+		}
+		// ** End Selective illumination **
+
 
 		// Compute illumination
 		vec3 ncap = glm::normalize(currentNormal);
@@ -1192,6 +1217,9 @@ int myAbs(int const& v) {
 // Custom Loader ==================================================================================================
 
 void LoadCustomModel(vector<Triangle>& triangles) {
+	
+	cout << "Loading custom model.." << endl;
+
 	FILE * input;
 	fopen_s(&input, "bun1.model.txt", "r");
 
@@ -1227,6 +1255,7 @@ void LoadCustomModel(vector<Triangle>& triangles) {
 
 		triangles.push_back(Triangle(points[xi], points[yi], points[zi], color));
 	}
+<<<<<<< HEAD
 }
 
 const int PLY_LOADER_OK = 0;
@@ -1672,4 +1701,39 @@ void printBounds(vector<Triangle>& triangles) {
 	cout << mins[0] << " <= x <= " << maxs[0] << endl;
 	cout << mins[1] << " <= y <= " << maxs[1] << endl;
 	cout << mins[2] << " <= z <= " << maxs[2] << endl;
+=======
+
+
+	// Code to write normals to triangles:
+	for (int i = 0; i < trianglesCount; i++) {
+		writeNormal(triangles[i]);
+	}
+
+	cout << "Custom model successfully loaded!" << endl;	
+}
+
+// Check if a triangle is backwards facing in relation to the camera.
+// Part of the Backface-culling procedure that is supposed to speed up rendering time.
+// Assumptions: Triangle that is passed into this algorithm must not be a Bézier surface, 
+//				ie, all points on the triangle must have the same normal.
+bool isBackface(vec3 pos3d, vec3 triangleNormal) {
+	vec3 cameraFacing = pos3d - cameraPosition;
+	float dotProduct = glm::dot(cameraFacing, triangleNormal);
+
+	if (dotProduct < 0) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+ 
+// Calculate the normal of a triangle and write it back to its "normal" field
+// Part of the LoadCustomModel procedure
+// Assumptions: All the fields containing the vertices of the triangles have been filled.
+void writeNormal(Triangle& triangle) {
+	vec3 lineOne = triangle.v1 - triangle.v0;
+	vec3 lineTwo = triangle.v0 - triangle.v2;
+	triangle.normal = glm::cross(lineOne, lineTwo);
+>>>>>>> origin/master
 }

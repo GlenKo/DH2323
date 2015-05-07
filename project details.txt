@@ -1,0 +1,27 @@
+Things that can be done to speed up efficiency:
+
+Backface-culling (implemented)
+Description: Ignores all triangles that face away from the camera's line of sight
+Method: For all triangles, if the dot product of the triangleNormal and the cameraDirection is more than 0, it means it is backfacing hence ignore it.
+Limitation: Only really works for objects that are "closed". If lets say, an open box is to be modelled, it might not work.
+Reduction of render timing:
+Best case - all triangles are backface except for a few [~100%]
+Average case - around half the triangles are backface [~50%]
+Worst case - all triangles are foward facing in relation to the camera [~0%]
+
+Z/Occlusion-culling (not implemented)
+Description: Ignores all triangles that are *fully* occluded by other triangles in relation to the camera
+Method: Memoized algorithm that stores the closest Z-coordinate in relation to the camera
+Limitation: 
+(seems to be better than backface-culling in theory but is difficult to implement and compute efficiently)
+
+Clipping (not implemented)
+
+blah blah blah
+
+Selective-illumination (implemented)
+Description: Calculating directLight for every pixel might be time consuming, so we only calculate direct light for backfacing triangles
+Method: For each pixel, check if it is backfacing. If it is, do not compute directLight value and only use indirectLight multiplier
+Limitation: Only works if indirectLight multiplier is a constant
+Reduction of render timing:
+WHO KNOWS?!?!?

@@ -136,7 +136,6 @@ int myAbs(int const& v);
 
 // Functions Coded by Glen
 bool isBackface(vec3 pos3d, vec3 triangleNormal);
-bool isLightBackface(vec3 pos3d, vec3 triangleNormal);
 void writeNormal(Triangle& triangle);
 
 // ----------------------------------------------------------------------------
@@ -151,7 +150,7 @@ void printBounds(vector<Triangle>& triangles);
 int main(int argc, char* argv[]) {
 	//LoadCustomModel(triangles);
 	
-	int plyLoaderErrorCode = LoadPlyFile("dragon_vrip.ply", triangles, false, true, true);
+	int plyLoaderErrorCode = LoadPlyFile("happy_vrip.ply", triangles, false, true, true);
 	if (plyLoaderErrorCode != PLY_LOADER_OK) {
 		cout << "Unable to load file, error code " << plyLoaderErrorCode << endl;
 		return 1;
@@ -940,9 +939,9 @@ void DrawWithPixelIllumination() {
 	for (size_t i = 0; i<triangles.size(); ++i) {
 
 		//// ** Start Backface-culling code **
-		//if (isBackface(triangles[i].v0, triangles[i].normal)) {
-		//	continue;
-		//}
+		if (isBackface(triangles[i].v0, triangles[i].normal)) {
+			continue;
+		}
 		//// ** End Backface-culling code **
 
 		vector<Vertex> vertices(3);
@@ -1065,7 +1064,7 @@ void PixelShader(const PixelP& p) {
 
 		// ** Start Selective illumination **
 		// do not compute directLight if backfacing
-		//if (isLightBackface(p.pos3d, currentNormal)) {
+		//if (isBackface(p.pos3d, currentNormal)) {
 		//	vec3 pixelColor = currentReflectance * (indirectLightPowerPerArea);
 		//	PutPixelSDL(screen, x, y, pixelColor);
 		//	return;
@@ -1235,22 +1234,6 @@ bool isBackface(vec3 pos3d, vec3 triangleNormal) {
 	float dotProduct = glm::dot(cameraFacing, triangleNormal);
 
 	if (dotProduct < 0) {
-		return true;
-	}
-	else {
-		return false;
-	}
-}
-
-// Check if a triangle is backwards facing in relation to the light.
-// Part of the Backface-culling procedure that is supposed to speed up rendering time.
-// Assumptions: Triangle that is passed into this algorithm must not be a Bézier surface, 
-//				ie, all points on the triangle must have the same normal.
-bool isLightBackface(vec3 pos3d, vec3 triangleNormal) {
-	vec3 lightFacing = pos3d - lightPos;
-	float dotProduct = glm::dot(lightFacing, triangleNormal);
-
-	if (dotProduct > 0) {
 		return true;
 	}
 	else {

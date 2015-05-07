@@ -60,8 +60,7 @@ int t;
 vector<Triangle> triangles;
 
 float focalLength = 500.0f;
-vec3 cameraPosition(0.00174345, -0.134732, -0.0685516);
-//vec3 cameraPosition(-0.0065f, -0.1473f, -0.2671f);
+vec3 cameraPosition(-0.0065f, -0.1473f, -0.2671f);
 float yaw = 0.0436f;
 float pitch = 0.1614f;
 float roll = 0.0f; //TODO
@@ -69,6 +68,7 @@ float roll = 0.0f; //TODO
 float depthBuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
 
 vec3 lightPos(0.1565f, -0.18f, 1.7829f);
+//vec3 lightPos(0, -0.5, -0.7);
 vec3 lightPower = 14.f*vec3(1, 1, 1);
 vec3 indirectLightPowerPerArea = 0.05f*vec3(1, 1, 1);
 
@@ -138,12 +138,16 @@ int systemIsBigEndian();
 void reverseEndianness(unsigned char * binaryData, int size);
 void printBounds(vector<Triangle>& triangles);
 
-int main(int argc, char* argv[]) {	
-	//int rr = LoadPlyFile("bun_zipper_res4.ply", triangles, false, true, true);
-	int rr = LoadPlyFile("happy_vrip.ply", triangles, false, true, true);
+int main(int argc, char* argv[]) {
+	LoadCustomModel(triangles);
+
+	//int plyLoaderErrorCode = LoadPlyFile("happy_vrip.ply", triangles, false, true, true);
+	//if (plyLoaderErrorCode != PLY_LOADER_OK) {
+	//	cout << "Unable to load file, error code " << plyLoaderErrorCode << endl;
+	//	return 1;
+	//}
 
 	printBounds(triangles);
-	system("pause");
 
 	screen = InitializeSDL(SCREEN_WIDTH, SCREEN_HEIGHT);
 	t = SDL_GetTicks();	// Set start value for timer.
@@ -218,11 +222,7 @@ void Update() {
 	float dt = float(t2 - t);
 	t = t2;
 	cout << "Render time: " << dt << " ms." << endl;
-<<<<<<< HEAD
-	cout << "Camera Position: " << cameraPosition.x << " " << cameraPosition.y << " " << cameraPosition.z << endl;
-=======
 	//cout << lightPos.x << " " << lightPos.y << " " << lightPos.z << endl;
->>>>>>> origin/master
 
 	Uint8* keystate = SDL_GetKeyState(0);
 
@@ -1214,10 +1214,37 @@ int myAbs(int const& v) {
 	return (v < 0) ? -v : v;
 }
 
+// Back Face culling ==================================================================================================
+
+// Check if a triangle is backwards facing in relation to the camera.
+// Part of the Backface-culling procedure that is supposed to speed up rendering time.
+// Assumptions: Triangle that is passed into this algorithm must not be a Bézier surface, 
+//				ie, all points on the triangle must have the same normal.
+bool isBackface(vec3 pos3d, vec3 triangleNormal) {
+	vec3 cameraFacing = pos3d - cameraPosition;
+	float dotProduct = glm::dot(cameraFacing, triangleNormal);
+
+	if (dotProduct < 0) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+// Calculate the normal of a triangle and write it back to its "normal" field
+// Part of the LoadCustomModel procedure
+// Assumptions: All the fields containing the vertices of the triangles have been filled.
+void writeNormal(Triangle& triangle) {
+	vec3 lineOne = triangle.v1 - triangle.v0;
+	vec3 lineTwo = triangle.v0 - triangle.v2;
+	triangle.normal = glm::cross(lineOne, lineTwo);
+}
+
 // Custom Loader ==================================================================================================
 
 void LoadCustomModel(vector<Triangle>& triangles) {
-	
+
 	cout << "Loading custom model.." << endl;
 
 	FILE * input;
@@ -1255,7 +1282,14 @@ void LoadCustomModel(vector<Triangle>& triangles) {
 
 		triangles.push_back(Triangle(points[xi], points[yi], points[zi], color));
 	}
-<<<<<<< HEAD
+
+
+	// Code to write normals to triangles:
+	//for (int i = 0; i < trianglesCount; i++) {
+	//	writeNormal(triangles[i]);
+	//}
+
+	cout << "Custom model successfully loaded!" << endl;
 }
 
 const int PLY_LOADER_OK = 0;
@@ -1701,39 +1735,4 @@ void printBounds(vector<Triangle>& triangles) {
 	cout << mins[0] << " <= x <= " << maxs[0] << endl;
 	cout << mins[1] << " <= y <= " << maxs[1] << endl;
 	cout << mins[2] << " <= z <= " << maxs[2] << endl;
-=======
-
-
-	// Code to write normals to triangles:
-	for (int i = 0; i < trianglesCount; i++) {
-		writeNormal(triangles[i]);
-	}
-
-	cout << "Custom model successfully loaded!" << endl;	
-}
-
-// Check if a triangle is backwards facing in relation to the camera.
-// Part of the Backface-culling procedure that is supposed to speed up rendering time.
-// Assumptions: Triangle that is passed into this algorithm must not be a Bézier surface, 
-//				ie, all points on the triangle must have the same normal.
-bool isBackface(vec3 pos3d, vec3 triangleNormal) {
-	vec3 cameraFacing = pos3d - cameraPosition;
-	float dotProduct = glm::dot(cameraFacing, triangleNormal);
-
-	if (dotProduct < 0) {
-		return true;
-	}
-	else {
-		return false;
-	}
-}
- 
-// Calculate the normal of a triangle and write it back to its "normal" field
-// Part of the LoadCustomModel procedure
-// Assumptions: All the fields containing the vertices of the triangles have been filled.
-void writeNormal(Triangle& triangle) {
-	vec3 lineOne = triangle.v1 - triangle.v0;
-	vec3 lineTwo = triangle.v0 - triangle.v2;
-	triangle.normal = glm::cross(lineOne, lineTwo);
->>>>>>> origin/master
 }

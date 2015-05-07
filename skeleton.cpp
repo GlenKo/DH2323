@@ -60,7 +60,8 @@ int t;
 vector<Triangle> triangles;
 
 float focalLength = 500.0f;
-vec3 cameraPosition(-0.0065f, -0.1473f, -0.2671f);
+vec3 cameraPosition(0.00174345, -0.134732, -0.0685516);
+//vec3 cameraPosition(-0.0065f, -0.1473f, -0.2671f);
 float yaw = 0.0436f;
 float pitch = 0.1614f;
 float roll = 0.0f; //TODO
@@ -68,7 +69,6 @@ float roll = 0.0f; //TODO
 float depthBuffer[SCREEN_HEIGHT][SCREEN_WIDTH];
 
 vec3 lightPos(0.1565f, -0.18f, 1.7829f);
-//vec3 lightPos(0, -0.5, -0.7);
 vec3 lightPower = 14.f*vec3(1, 1, 1);
 vec3 indirectLightPowerPerArea = 0.05f*vec3(1, 1, 1);
 
@@ -128,8 +128,18 @@ int myAbs(int const& v);
 // ----------------------------------------------------------------------------
 void LoadCustomModel(vector<Triangle>& triangles);
 
-int main(int argc, char* argv[]) {
-	LoadCustomModel(triangles);
+int LoadPlyFile(const char * filePath, vector<Triangle>& triangles, bool reverseX = false, bool reverseY = false, bool reverseZ = false);
+char * readHeaderLine(FILE * input);
+int systemIsBigEndian();
+void reverseEndianness(unsigned char * binaryData, int size);
+void printBounds(vector<Triangle>& triangles);
+
+int main(int argc, char* argv[]) {	
+	//int rr = LoadPlyFile("bun_zipper_res4.ply", triangles, false, true, true);
+	int rr = LoadPlyFile("happy_vrip.ply", triangles, false, true, true);
+
+	printBounds(triangles);
+	system("pause");
 
 	screen = InitializeSDL(SCREEN_WIDTH, SCREEN_HEIGHT);
 	t = SDL_GetTicks();	// Set start value for timer.
@@ -204,7 +214,7 @@ void Update() {
 	float dt = float(t2 - t);
 	t = t2;
 	cout << "Render time: " << dt << " ms." << endl;
-	cout << lightPos.x << " " << lightPos.y << " " << lightPos.z << endl;
+	cout << "Camera Position: " << cameraPosition.x << " " << cameraPosition.y << " " << cameraPosition.z << endl;
 
 	Uint8* keystate = SDL_GetKeyState(0);
 
@@ -1217,4 +1227,449 @@ void LoadCustomModel(vector<Triangle>& triangles) {
 
 		triangles.push_back(Triangle(points[xi], points[yi], points[zi], color));
 	}
+}
+
+const int PLY_LOADER_OK = 0;
+const int PLY_LOADER_INVALID_IDENTIFIER = 1;
+const int PLY_LOADER_UNKNOWN_FORMAT = 2;
+const int PLY_LOADER_INVALID_FORMATTING = 3;
+const int PLY_LOADER_UNSUPPORTED_FACE_PROPERTY = 4;
+const int PLY_LOADER_UNSUPPORTED_POLYGON = 5;
+const int PLY_LOADER_WRONG_NUMBER_OF_AXIS = 6;
+
+int LoadPlyFile(const char * filePath, vector<Triangle>& triangles, bool reverseX, bool reverseY, bool reverseZ) {
+	FILE * input;
+	fopen_s(&input, filePath, "rb");
+
+	int mode = 0; // 1 = ASCII, 2 = binary_little_endian, 3 = binary_big_endian
+	bool readVertices = false;
+	int vertexCount = 0;
+	bool readFaces = false;
+	int faceCount = 0;
+
+	int xyzCount = 0;
+
+	vector<int> dataType; // 1 = signed integral, 2 = unsigned integral, 3 = floating-point
+	vector<int> dataLength; // length of the data type, in bytes
+	vector<int> dataIgnore; // 1 = ignore the data (unknown property), 0 = read it!
+
+	vector<int> faceDataType; //same as above, but with 4 = the list.
+	vector<int> faceDataLength;
+	vector<int> faceDataIgnore;
+
+	char str[100];
+	char * token;
+
+	cout << "Reading PLY file header" << endl;
+
+	// === Read PLY identifier ===
+	fgets(str, 99, input);
+	if (strcmp(str, "ply\n") != 0) {
+		return PLY_LOADER_INVALID_IDENTIFIER;
+	}
+
+	// === Read format ===
+	token = readHeaderLine(input);
+	if (token == NULL || strcmp(token, "format") != 0) {
+		return PLY_LOADER_INVALID_FORMATTING;
+	}
+	token = strtok(NULL, " \t\r\n");
+	if (token == NULL) {
+		return PLY_LOADER_INVALID_FORMATTING;
+	}
+	if (strcmp(token, "ascii") == 0) {
+		mode = 1;
+	}
+	else if (strcmp(token, "binary_little_endian") == 0) {
+		mode = 2;
+	}
+	else if (strcmp(token, "binary_big_endian") == 0) {
+		mode = 3;
+	}
+	else {
+		return PLY_LOADER_UNKNOWN_FORMAT;
+	}
+	//ignore version
+
+	// === Read each element ===
+	token = readHeaderLine(input);
+	while (true) {
+		if (token == NULL) {
+			return PLY_LOADER_INVALID_FORMATTING;
+		}
+		if (strcmp(token, "end_header") == 0) {
+			break;
+		}
+		if (strcmp(token, "element") != 0) {
+			return PLY_LOADER_INVALID_FORMATTING;
+		}
+
+		token = strtok(NULL, " \t\r\n");
+		if (token == NULL) {
+			return PLY_LOADER_INVALID_FORMATTING;
+		}
+		if (strcmp(token, "vertex") == 0) {
+			readVertices = true;
+			//get size
+			token = strtok(NULL, " \t\r\n");
+			if (token == NULL) {
+				return PLY_LOADER_INVALID_FORMATTING;
+			}
+			sscanf(token, "%d", &vertexCount);
+
+			//read vertex properties
+			while (true) {
+				token = readHeaderLine(input);
+				if (token == NULL) {
+					return PLY_LOADER_INVALID_FORMATTING;
+				}
+				if (strcmp(token, "property") == 0) {
+					token = strtok(NULL, " \t\r\n");
+					if (token == NULL) {
+						return PLY_LOADER_INVALID_FORMATTING;
+					}
+
+					if (strcmp(token, "char") == 0) {
+						dataType.push_back(1);
+						dataLength.push_back(1);
+					}
+					else if (strcmp(token, "uchar") == 0) {
+						dataType.push_back(2);
+						dataLength.push_back(1);
+					}
+					else if (strcmp(token, "short") == 0) {
+						dataType.push_back(1);
+						dataLength.push_back(2);
+					}
+					else if (strcmp(token, "ushort") == 0) {
+						dataType.push_back(2);
+						dataLength.push_back(2);
+					}
+					else if (strcmp(token, "int") == 0) {
+						dataType.push_back(1);
+						dataLength.push_back(4);
+					}
+					else if (strcmp(token, "uint") == 0) {
+						dataType.push_back(2);
+						dataLength.push_back(4);
+					}
+					else if (strcmp(token, "float") == 0) {
+						dataType.push_back(3);
+						dataLength.push_back(4);
+					}
+					else if (strcmp(token, "double") == 0) {
+						dataType.push_back(3);
+						dataLength.push_back(8);
+					}
+					else {
+						return PLY_LOADER_INVALID_FORMATTING;
+					}
+
+					token = strtok(NULL, " \t\r\n");
+					if (token == NULL) {
+						return PLY_LOADER_INVALID_FORMATTING;
+					}
+
+					if (strcmp(token, "x") == 0 || strcmp(token, "y") == 0 || strcmp(token, "z") == 0) {
+						xyzCount++;
+						dataIgnore.push_back(0);
+					}
+					else {
+						dataIgnore.push_back(1);
+					}
+				}
+				else {
+					break;
+				}
+			}
+
+			if (xyzCount != 3) {
+				return PLY_LOADER_WRONG_NUMBER_OF_AXIS;
+			}
+		}
+		else if (strcmp(token, "face") == 0) {
+			readFaces = true;
+			//get size
+			token = strtok(NULL, " \t\r\n");
+			if (token == NULL) {
+				return PLY_LOADER_INVALID_FORMATTING;
+			}
+			sscanf(token, "%d", &faceCount);
+
+			//read faces properties
+			while (true) {
+				token = readHeaderLine(input);
+				if (token == NULL) {
+					return PLY_LOADER_INVALID_FORMATTING;
+				}
+				if (strcmp(token, "property") == 0) {
+					token = strtok(NULL, "\r\n");
+					if (token == NULL) {
+						return PLY_LOADER_INVALID_FORMATTING;
+					}
+					if (strcmp(token, "list uchar int vertex_indices") != 0) {
+						return PLY_LOADER_UNSUPPORTED_FACE_PROPERTY;
+					}
+				}
+				else {
+					break;
+				}
+			}
+		}
+		else {
+			//ignore the element, as it is unknown
+			while (true) {
+				token = readHeaderLine(input);
+				if (token == NULL) {
+					return PLY_LOADER_INVALID_FORMATTING;
+				}
+				if (strcmp(token, "property") == 0) {
+					//continue;
+				}
+				else {
+					break;
+				}
+			}
+		}
+	}
+
+	// === Read the body ===
+	if (mode == 1) { //ASCII
+		// Construct the fscanf format string
+		// In ASCII mode, everything is read as a double, despite its original data type, as scanf can hand the variance
+		char readFormatString[1000] = "";
+		for (int i = 0; i < dataType.size(); i++) {
+			if (dataIgnore[i] == 1) {
+				strcat(readFormatString, "%*lf ");
+			}
+			else {
+				strcat(readFormatString, "%lf ");
+			}
+		}
+		readFormatString[strlen(readFormatString) - 1] = '\0'; // remove last space
+
+		// Load points
+		vector<vec3> vertices;
+		vertices.reserve(vertexCount);
+
+		double xf, yf, zf;
+		for (int i = 0; i < vertexCount; i++) {
+			if (i % 100000 == 0) {
+				cout << "Reading vertex " << i << " of " << vertexCount << endl;
+			}
+
+			fscanf_s(input, readFormatString, &xf, &yf, &zf);
+
+			vertices.push_back(
+				vec3(
+					(reverseX) ? -xf : xf,
+					(reverseY) ? -yf : yf,
+					(reverseZ) ? -zf : zf
+				)
+			);
+		}
+
+		// Load triangles
+		triangles.clear();
+		triangles.reserve(faceCount);
+
+		vec3 color(1, 1, 1);
+
+		int ci, xi, yi, zi;
+		for (int i = 0; i < faceCount; i++) {
+			if (i % 100000 == 0) {
+				cout << "Reading triangle " << i << " of " << faceCount << endl;
+			}
+
+			fscanf_s(input, "%d %d %d %d", &ci, &xi, &yi, &zi);
+
+			if (ci != 3) {
+				triangles.clear();
+				return PLY_LOADER_UNSUPPORTED_POLYGON;
+			}
+
+			triangles.push_back(Triangle(vertices[xi], vertices[yi], vertices[zi], color));
+		}
+	}
+	else { // 2 or 3, i.e. binary_little_endian or binary_big_endian
+		// Construct the fscanf format string
+		int dataPosition[] = { 0, 0, 0 }; //holds a reference to which index the x, y, z property is
+		int dataPositionCounter = 0;
+
+		char readFormatString[1000] = "";
+		char tempStr[10];
+		for (int i = 0; i < dataType.size(); i++) {
+			if (dataIgnore[i] == 1) {
+				strcat(readFormatString, "%*");
+			}
+			else {
+				strcat(readFormatString, "%");
+				dataPosition[dataPositionCounter++] = i;
+			}
+
+			sprintf(tempStr, "%d", dataLength[i]);
+
+			strcat(readFormatString, tempStr);
+			strcat(readFormatString, "c");
+		}
+
+		// Load points
+		vector<vec3> vertices;
+		vertices.reserve(vertexCount);
+
+		unsigned char binaryData[3][8];
+		float coord[3];
+
+		for (int i = 0; i < vertexCount; i++) {
+			if (i % 100000 == 0) {
+				cout << "Reading vertex " << i << " of " << vertexCount << endl;
+			}
+
+			fscanf(input, readFormatString, binaryData[0], binaryData[1], binaryData[2]);
+
+			for (int j = 0; j < 3; j++) {
+				int k = dataPosition[j];
+				if ((mode == 2 && systemIsBigEndian()) || (mode == 3 && !systemIsBigEndian())) {
+					reverseEndianness(binaryData[j], dataLength[k]);
+				}
+
+				if (dataType[k] == 1 && dataLength[k] == 1) {
+					coord[j] = float(*((signed char *)binaryData[j]));
+				}
+				else if(dataType[k] == 2 && dataLength[k] == 1) {
+					coord[j] = float(*((unsigned char *)binaryData[j]));
+				}
+				else if (dataType[k] == 1 && dataLength[k] == 2) {
+					coord[j] = float(*((signed short *)binaryData[j]));
+				}
+				else if (dataType[k] == 2 && dataLength[k] == 2) {
+					coord[j] = float(*((unsigned short *)binaryData[j]));
+				}
+				else if (dataType[k] == 1 && dataLength[k] == 4) {
+					coord[j] = float(*((signed int *)binaryData[j]));
+				}
+				else if (dataType[k] == 2 && dataLength[k] == 4) {
+					coord[j] = float(*((unsigned int *)binaryData[j]));
+				}
+				else if (dataType[k] == 3 && dataLength[k] == 4) {
+					coord[j] = *((float *)binaryData[j]);
+				}
+				else if (dataType[k] == 3 && dataLength[k] == 8) {
+					coord[j] = float(*((double *)binaryData[j]));
+				}
+			}
+
+			vertices.push_back(
+				vec3(
+					(reverseX) ? -coord[0] : coord[0],
+					(reverseY) ? -coord[1] : coord[1],
+					(reverseZ) ? -coord[2] : coord[2]
+				)
+			);
+		}
+
+		// Load triangles
+		triangles.clear();
+		triangles.reserve(faceCount);
+
+		vec3 color(1, 1, 1);
+
+		unsigned char ci;
+		unsigned char binaryData2[8];
+		int indexes[3];
+		for (int i = 0; i < faceCount; i++) {
+			if (i % 100000 == 0) {
+				cout << "Reading triangle " << i << " of " << faceCount << endl;
+			}
+
+			fscanf(input, "%1c%4c%4c%4c", &ci, binaryData[0], binaryData[1], binaryData[2]);
+
+			if (ci != unsigned char(3)) {
+				triangles.clear();
+				return PLY_LOADER_UNSUPPORTED_POLYGON;
+			}
+
+			for (int j = 0; j < 3; j++) {
+				if ((mode == 2 && systemIsBigEndian()) || (mode == 3 && !systemIsBigEndian())) {
+					reverseEndianness(binaryData[j], 4);
+				}
+				
+				indexes[j] = *((int *)binaryData[j]);
+			}
+
+			triangles.push_back(Triangle(vertices[indexes[0]], vertices[indexes[1]], vertices[indexes[2]], color));
+		}
+	}
+
+	cout << "PLY file loaded." << endl;
+
+	return PLY_LOADER_OK;
+}
+
+char * readHeaderLine(FILE * input) {
+	char str[1000];
+	char * token;
+
+	while (true) {
+		fgets(str, 999, input);
+
+		token = strtok(str, " \t\r\n");
+
+		if (token == NULL) {
+			return NULL;
+		}
+		if (strcmp(token, "comment") != 0) {
+			return token;
+		}
+	}
+}
+
+int systemIsBigEndian() {
+	union {
+		uint32_t i;
+		char c[4];
+	} bint = { 0x01020304 };
+
+	return bint.c[0] == 1;
+}
+
+void reverseEndianness(unsigned char * binaryData, int size) {
+	char temp;
+
+	for (int i = 0; i < size / 2; i++) {
+		temp = binaryData[i];
+		binaryData[i] = binaryData[size - i - 1];
+		binaryData[size - i - 1] = temp;
+	}
+}
+
+void printBounds(vector<Triangle>& triangles) {
+	float mins[3] = { numeric_limits<float>::max(), numeric_limits<float>::max(), numeric_limits<float>::max() };
+	float maxs[3] = { numeric_limits<float>::min(), numeric_limits<float>::min(), numeric_limits<float>::min() };
+	for (int i = 0; i < triangles.size(); i++) {
+		mins[0] = myMin(mins[0], triangles[i].v0.x);
+		mins[0] = myMin(mins[0], triangles[i].v1.x);
+		mins[0] = myMin(mins[0], triangles[i].v2.x);
+		maxs[0] = myMax(mins[0], triangles[i].v0.x);
+		maxs[0] = myMax(mins[0], triangles[i].v1.x);
+		maxs[0] = myMax(mins[0], triangles[i].v2.x);
+
+		mins[1] = myMin(mins[1], triangles[i].v0.y);
+		mins[1] = myMin(mins[1], triangles[i].v1.y);
+		mins[1] = myMin(mins[1], triangles[i].v2.y);
+		maxs[1] = myMax(mins[1], triangles[i].v0.y);
+		maxs[1] = myMax(mins[1], triangles[i].v1.y);
+		maxs[1] = myMax(mins[1], triangles[i].v2.y);
+
+		mins[2] = myMin(mins[2], triangles[i].v0.z);
+		mins[2] = myMin(mins[2], triangles[i].v1.z);
+		mins[2] = myMin(mins[2], triangles[i].v2.z);
+		maxs[2] = myMax(mins[2], triangles[i].v0.z);
+		maxs[2] = myMax(mins[2], triangles[i].v1.z);
+		maxs[2] = myMax(mins[2], triangles[i].v2.z);
+	}
+
+	cout << mins[0] << " <= x <= " << maxs[0] << endl;
+	cout << mins[1] << " <= y <= " << maxs[1] << endl;
+	cout << mins[2] << " <= z <= " << maxs[2] << endl;
 }

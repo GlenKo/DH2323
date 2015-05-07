@@ -75,6 +75,15 @@ vec3 indirectLightPowerPerArea = 0.05f*vec3(1, 1, 1);
 vec3 currentNormal;
 vec3 currentReflectance;
 
+// Loader variables
+const int PLY_LOADER_OK = 0;
+const int PLY_LOADER_INVALID_IDENTIFIER = 1;
+const int PLY_LOADER_UNKNOWN_FORMAT = 2;
+const int PLY_LOADER_INVALID_FORMATTING = 3;
+const int PLY_LOADER_UNSUPPORTED_FACE_PROPERTY = 4;
+const int PLY_LOADER_UNSUPPORTED_POLYGON = 5;
+const int PLY_LOADER_WRONG_NUMBER_OF_AXIS = 6;
+
 // ----------------------------------------------------------------------------
 // FUNCTIONS
 
@@ -139,13 +148,13 @@ void reverseEndianness(unsigned char * binaryData, int size);
 void printBounds(vector<Triangle>& triangles);
 
 int main(int argc, char* argv[]) {
-	LoadCustomModel(triangles);
-
-	//int plyLoaderErrorCode = LoadPlyFile("happy_vrip.ply", triangles, false, true, true);
-	//if (plyLoaderErrorCode != PLY_LOADER_OK) {
-	//	cout << "Unable to load file, error code " << plyLoaderErrorCode << endl;
-	//	return 1;
-	//}
+	//LoadCustomModel(triangles);
+	
+	int plyLoaderErrorCode = LoadPlyFile("happy_vrip.ply", triangles, false, true, true);
+	if (plyLoaderErrorCode != PLY_LOADER_OK) {
+		cout << "Unable to load file, error code " << plyLoaderErrorCode << endl;
+		return 1;
+	}
 
 	printBounds(triangles);
 
@@ -930,9 +939,9 @@ void DrawWithPixelIllumination() {
 	for (size_t i = 0; i<triangles.size(); ++i) {
 
 		//// ** Start Backface-culling code **
-		//if (isBackface(triangles[i].v0, triangles[i].normal)) {
-		//	continue;
-		//}
+		if (isBackface(triangles[i].v0, triangles[i].normal)) {
+			continue;
+		}
 		//// ** End Backface-culling code **
 
 		vector<Vertex> vertices(3);
@@ -1055,11 +1064,11 @@ void PixelShader(const PixelP& p) {
 
 		// ** Start Selective illumination **
 		// do not compute directLight if backfacing
-		if (isBackface(p.pos3d, currentNormal)) {
-			vec3 pixelColor = currentReflectance * (indirectLightPowerPerArea);
-			PutPixelSDL(screen, x, y, pixelColor);
-			return;
-		}
+		//if (isBackface(p.pos3d, currentNormal)) {
+		//	vec3 pixelColor = currentReflectance * (indirectLightPowerPerArea);
+		//	PutPixelSDL(screen, x, y, pixelColor);
+		//	return;
+		//}
 		// ** End Selective illumination **
 
 
@@ -1232,15 +1241,6 @@ bool isBackface(vec3 pos3d, vec3 triangleNormal) {
 	}
 }
 
-// Calculate the normal of a triangle and write it back to its "normal" field
-// Part of the LoadCustomModel procedure
-// Assumptions: All the fields containing the vertices of the triangles have been filled.
-void writeNormal(Triangle& triangle) {
-	vec3 lineOne = triangle.v1 - triangle.v0;
-	vec3 lineTwo = triangle.v0 - triangle.v2;
-	triangle.normal = glm::cross(lineOne, lineTwo);
-}
-
 // Custom Loader ==================================================================================================
 
 void LoadCustomModel(vector<Triangle>& triangles) {
@@ -1283,22 +1283,8 @@ void LoadCustomModel(vector<Triangle>& triangles) {
 		triangles.push_back(Triangle(points[xi], points[yi], points[zi], color));
 	}
 
-
-	// Code to write normals to triangles:
-	//for (int i = 0; i < trianglesCount; i++) {
-	//	writeNormal(triangles[i]);
-	//}
-
 	cout << "Custom model successfully loaded!" << endl;
 }
-
-const int PLY_LOADER_OK = 0;
-const int PLY_LOADER_INVALID_IDENTIFIER = 1;
-const int PLY_LOADER_UNKNOWN_FORMAT = 2;
-const int PLY_LOADER_INVALID_FORMATTING = 3;
-const int PLY_LOADER_UNSUPPORTED_FACE_PROPERTY = 4;
-const int PLY_LOADER_UNSUPPORTED_POLYGON = 5;
-const int PLY_LOADER_WRONG_NUMBER_OF_AXIS = 6;
 
 int LoadPlyFile(const char * filePath, vector<Triangle>& triangles, bool reverseX, bool reverseY, bool reverseZ) {
 	FILE * input;
